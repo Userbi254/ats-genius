@@ -6,6 +6,8 @@ import { CVPreview } from '@/components/cv/CVPreview';
 import { CVUploader } from '@/components/cv/CVUploader';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CVData, Job } from '@/types/job';
 import { generatePDF } from '@/utils/pdfGenerator';
@@ -348,79 +350,337 @@ export default function CVPage() {
                   <p className="text-sm text-muted-foreground mt-1">
                     Your saved profile has been loaded. Click Generate to create your CV.
                   </p>
-                  <Button className="mt-3" onClick={() => setActiveTab('generate')}>
-                    Continue to Generate
-                  </Button>
                 </div>
               )}
+
+              {/* Upload Tab Navigation Buttons */}
+              <div className="flex items-center justify-between pt-4 border-t border-border">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setCVData({
+                      fullName: '',
+                      email: '',
+                      phone: '',
+                      location: 'Nairobi, Kenya',
+                      summary: '',
+                      skills: [],
+                      experience: [{ title: '', company: '', duration: '', description: '' }],
+                      education: [{ degree: '', institution: '', year: '' }],
+                      selectedJob: undefined
+                    });
+                  }}
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Upload Different CV
+                </Button>
+                <Button
+                  onClick={() => setActiveTab('generate')}
+                  disabled={!cvData.fullName}
+                >
+                  Next: Generate CV
+                  <Sparkles className="w-4 h-4 ml-2" />
+                </Button>
+              </div>
             </div>
           </TabsContent>
 
-          {/* Tab 2: Generate */}
+          {/* Tab 2: Generate - Full Editable Fields */}
           <TabsContent value="generate" className="mt-0">
             <div className="glass-panel p-6 space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold mb-2">Generate Your CV</h2>
-                  <p className="text-muted-foreground text-sm">
-                    AI will optimize your CV for the selected job position.
-                  </p>
-                </div>
-                <Button
-                  size="lg"
-                  onClick={handleGenerate}
-                  disabled={isGenerating || !cvData.fullName}
-                  className="gap-2"
-                >
-                  {isGenerating ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-5 h-5" />
-                      Generate CV
-                    </>
-                  )}
-                </Button>
+              <div>
+                <h2 className="text-xl font-semibold mb-2">Edit & Generate Your CV</h2>
+                <p className="text-muted-foreground text-sm">
+                  Review and edit your information before AI optimization.
+                </p>
               </div>
 
-              {/* Summary of what will be generated */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-4 bg-muted/30 rounded-lg">
-                  <h3 className="font-medium mb-2">Your Information</h3>
-                  <div className="text-sm space-y-1 text-muted-foreground">
-                    <p><strong>Name:</strong> {cvData.fullName || 'Not provided'}</p>
-                    <p><strong>Email:</strong> {cvData.email || 'Not provided'}</p>
-                    <p><strong>Skills:</strong> {cvData.skills.length > 0 ? cvData.skills.slice(0, 5).join(', ') + (cvData.skills.length > 5 ? '...' : '') : 'Not provided'}</p>
-                    <p><strong>Experience:</strong> {cvData.experience.filter(e => e.title).length} entries</p>
-                    <p><strong>Education:</strong> {cvData.education.filter(e => e.degree).length} entries</p>
+              {/* Personal Information */}
+              <div className="space-y-4">
+                <h3 className="font-semibold text-lg border-b border-border pb-2">Personal Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">Full Name</label>
+                    <Input
+                      value={cvData.fullName}
+                      onChange={(e) => setCVData({ ...cvData, fullName: e.target.value })}
+                      placeholder="Your full name"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">Email</label>
+                    <Input
+                      value={cvData.email}
+                      onChange={(e) => setCVData({ ...cvData, email: e.target.value })}
+                      placeholder="your@email.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">Phone</label>
+                    <Input
+                      value={cvData.phone}
+                      onChange={(e) => setCVData({ ...cvData, phone: e.target.value })}
+                      placeholder="+254 xxx xxx xxx"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">Location</label>
+                    <Input
+                      value={cvData.location}
+                      onChange={(e) => setCVData({ ...cvData, location: e.target.value })}
+                      placeholder="City, Country"
+                    />
                   </div>
                 </div>
-
-                {selectedJob && (
-                  <div className="p-4 bg-primary/10 rounded-lg border border-primary/30">
-                    <h3 className="font-medium mb-2 text-primary">Target Job</h3>
-                    <div className="text-sm space-y-1 text-muted-foreground">
-                      <p><strong>Position:</strong> {selectedJob.job_name}</p>
-                      <p><strong>Company:</strong> {selectedJob.company || 'Unknown'}</p>
-                      <p><strong>Required Skills:</strong> {selectedJob.skills_needed?.slice(0, 5).join(', ') || 'Not specified'}</p>
-                    </div>
-                  </div>
-                )}
               </div>
 
-              {!cvData.fullName && (
-                <div className="p-4 bg-warning/10 border border-warning/30 rounded-lg">
-                  <p className="text-warning text-sm">
-                    Please upload your CV first to continue.
-                  </p>
-                  <Button variant="outline" className="mt-2" onClick={() => setActiveTab('upload')}>
-                    Go to Upload
+              {/* Summary */}
+              <div className="space-y-2">
+                <h3 className="font-semibold text-lg border-b border-border pb-2">Professional Summary</h3>
+                <Textarea
+                  value={cvData.summary}
+                  onChange={(e) => setCVData({ ...cvData, summary: e.target.value })}
+                  placeholder="Brief professional summary..."
+                  className="min-h-[100px]"
+                />
+              </div>
+
+              {/* Skills */}
+              <div className="space-y-2">
+                <h3 className="font-semibold text-lg border-b border-border pb-2">Skills</h3>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {cvData.skills.map((skill, index) => (
+                    <Badge key={index} variant="secondary" className="gap-1">
+                      {skill}
+                      <button
+                        onClick={() => setCVData({
+                          ...cvData,
+                          skills: cvData.skills.filter((_, i) => i !== index)
+                        })}
+                        className="ml-1 hover:text-destructive"
+                      >
+                        ×
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Add a skill..."
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const input = e.target as HTMLInputElement;
+                        if (input.value.trim()) {
+                          setCVData({
+                            ...cvData,
+                            skills: [...cvData.skills, input.value.trim()]
+                          });
+                          input.value = '';
+                        }
+                      }
+                    }}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const input = document.querySelector('input[placeholder="Add a skill..."]') as HTMLInputElement;
+                      if (input?.value.trim()) {
+                        setCVData({
+                          ...cvData,
+                          skills: [...cvData.skills, input.value.trim()]
+                        });
+                        input.value = '';
+                      }
+                    }}
+                  >
+                    Add
                   </Button>
                 </div>
+              </div>
+
+              {/* Experience */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b border-border pb-2">
+                  <h3 className="font-semibold text-lg">Work Experience</h3>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCVData({
+                      ...cvData,
+                      experience: [...cvData.experience, { title: '', company: '', duration: '', description: '' }]
+                    })}
+                  >
+                    + Add Experience
+                  </Button>
+                </div>
+                {cvData.experience.map((exp, index) => (
+                  <div key={index} className="p-4 bg-muted/30 rounded-lg space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-muted-foreground">Experience {index + 1}</span>
+                      {cvData.experience.length > 1 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => setCVData({
+                            ...cvData,
+                            experience: cvData.experience.filter((_, i) => i !== index)
+                          })}
+                        >
+                          Remove
+                        </Button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <Input
+                        value={exp.title}
+                        onChange={(e) => {
+                          const updated = [...cvData.experience];
+                          updated[index] = { ...updated[index], title: e.target.value };
+                          setCVData({ ...cvData, experience: updated });
+                        }}
+                        placeholder="Job Title"
+                      />
+                      <Input
+                        value={exp.company}
+                        onChange={(e) => {
+                          const updated = [...cvData.experience];
+                          updated[index] = { ...updated[index], company: e.target.value };
+                          setCVData({ ...cvData, experience: updated });
+                        }}
+                        placeholder="Company"
+                      />
+                      <Input
+                        value={exp.duration}
+                        onChange={(e) => {
+                          const updated = [...cvData.experience];
+                          updated[index] = { ...updated[index], duration: e.target.value };
+                          setCVData({ ...cvData, experience: updated });
+                        }}
+                        placeholder="Duration (e.g., 2020-2023)"
+                      />
+                    </div>
+                    <Textarea
+                      value={exp.description}
+                      onChange={(e) => {
+                        const updated = [...cvData.experience];
+                        updated[index] = { ...updated[index], description: e.target.value };
+                        setCVData({ ...cvData, experience: updated });
+                      }}
+                      placeholder="Describe your responsibilities and achievements..."
+                      className="min-h-[80px]"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {/* Education */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b border-border pb-2">
+                  <h3 className="font-semibold text-lg">Education</h3>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCVData({
+                      ...cvData,
+                      education: [...cvData.education, { degree: '', institution: '', year: '' }]
+                    })}
+                  >
+                    + Add Education
+                  </Button>
+                </div>
+                {cvData.education.map((edu, index) => (
+                  <div key={index} className="p-4 bg-muted/30 rounded-lg space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-muted-foreground">Education {index + 1}</span>
+                      {cvData.education.length > 1 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => setCVData({
+                            ...cvData,
+                            education: cvData.education.filter((_, i) => i !== index)
+                          })}
+                        >
+                          Remove
+                        </Button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <Input
+                        value={edu.degree}
+                        onChange={(e) => {
+                          const updated = [...cvData.education];
+                          updated[index] = { ...updated[index], degree: e.target.value };
+                          setCVData({ ...cvData, education: updated });
+                        }}
+                        placeholder="Degree/Certificate"
+                      />
+                      <Input
+                        value={edu.institution}
+                        onChange={(e) => {
+                          const updated = [...cvData.education];
+                          updated[index] = { ...updated[index], institution: e.target.value };
+                          setCVData({ ...cvData, education: updated });
+                        }}
+                        placeholder="Institution"
+                      />
+                      <Input
+                        value={edu.year}
+                        onChange={(e) => {
+                          const updated = [...cvData.education];
+                          updated[index] = { ...updated[index], year: e.target.value };
+                          setCVData({ ...cvData, education: updated });
+                        }}
+                        placeholder="Year"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Target Job Info */}
+              {selectedJob && (
+                <div className="p-4 bg-primary/10 rounded-lg border border-primary/30">
+                  <h3 className="font-medium mb-2 text-primary">Target Job</h3>
+                  <div className="text-sm space-y-1 text-muted-foreground">
+                    <p><strong>Position:</strong> {selectedJob.job_name}</p>
+                    <p><strong>Company:</strong> {selectedJob.company || 'Unknown'}</p>
+                    <p><strong>Required Skills:</strong> {selectedJob.skills_needed?.join(', ') || 'Not specified'}</p>
+                  </div>
+                </div>
               )}
+
+              {/* Generate Tab Navigation Buttons */}
+              <div className="flex items-center justify-between pt-4 border-t border-border">
+                <Button
+                  variant="outline"
+                  onClick={() => setActiveTab('upload')}
+                >
+                  Back to Upload
+                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleGenerate}
+                    disabled={isGenerating || !cvData.fullName}
+                    className="gap-2"
+                  >
+                    {isGenerating ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        Generate & Preview CV
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
             </div>
           </TabsContent>
 
