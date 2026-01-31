@@ -1,0 +1,35 @@
+/**
+ * POST /parse-cv
+ * Parse CV text using Gemini AI
+ */
+app.post('/parse-cv', async (req: Request, res: Response) => {
+    try {
+        const { cvText } = req.body;
+
+        if (!cvText || typeof cvText !== 'string' || cvText.trim().length < 50) {
+            return res.status(400).json({ success: false, error: 'CV text is required and must be at least 50 characters' });
+        }
+
+        console.log(`[API] /parse-cv request - ${cvText.length} chars`);
+
+        const parsed = await parseCVWithGemini(cvText);
+
+        if (!parsed) {
+            return res.status(500).json({ success: false, error: 'Failed to parse CV' });
+        }
+
+        res.json({
+            success: true,
+            data: {
+                is_cv: true,
+                confidence_score: 95,
+                validation_message: 'Valid CV',
+                ...parsed
+            }
+        });
+    } catch (error: any) {
+        console.error('[API] /parse-cv error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
