@@ -7,58 +7,86 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Download, Plus, X, Sparkles, FileUser, Save, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { CVUploader } from './CVUploader';
 import { useUserProfile, UserProfile } from '@/hooks/useUserProfile';
 import { toast } from 'sonner';
 import { supabase } from "@/integrations/supabase/client";
 
 interface CVGeneratorProps {
   selectedJob?: Job;
-  cvData: CVData;
-  onUpdate: (data: CVData) => void;
   onGenerate: (cv: CVData) => void;
-  showJobContext?: boolean;
-  showOptimizeButton?: boolean;
-  children?: React.ReactNode;
 }
 
-export function CVGenerator({
-  selectedJob,
-  cvData,
-  onUpdate,
-  onGenerate,
-  showJobContext = true,
-  showOptimizeButton = true,
-  children
-}: CVGeneratorProps) {
+export function CVGenerator({ selectedJob, onGenerate }: CVGeneratorProps) {
   const { profile, saveProfile, hasProfile } = useUserProfile();
   const [isGenerating, setIsGenerating] = useState(false);
+
+  const [cvData, setCVData] = useState<CVData>({
+    fullName: '',
+    email: '',
+    phone: '',
+    location: 'Nairobi, Kenya',
+    summary: '',
+    skills: selectedJob?.skills_needed || [],
+    experience: [{ title: '', company: '', duration: '', description: '' }],
+    education: [{ degree: '', institution: '', year: '' }],
+    selectedJob
+  });
+
   const [newSkill, setNewSkill] = useState('');
+
   const [hasOptimized, setHasOptimized] = useState<string | null>(null);
   const [optimizationReport, setOptimizationReport] = useState<any[]>([]);
 
   // Load saved profile on mount or when selectedJob changes
   useEffect(() => {
     if (hasProfile && hasOptimized !== selectedJob?.id) {
-      // Only merge if we haven't optimized for this job yet
-      // And if the current data is empty/default
-      const isDefault = !cvData.fullName && !cvData.email;
+      const initialData = {
+        ...cvData,
+        fullName: profile.fullName || cvData.fullName,
+        email: profile.email || cvData.email,
+        phone: profile.phone || cvData.phone,
+        location: profile.location || cvData.location,
+        summary: profile.summary || cvData.summary,
+        skills: profile.skills.length > 0 ? [...new Set([...profile.skills, ...(selectedJob?.skills_needed || [])])] : cvData.skills,
+        experience: profile.experience.length > 0 ? profile.experience : cvData.experience,
+        education: profile.education.length > 0 ? profile.education : cvData.education,
+      };
 
-      if (isDefault) {
-        const initialData = {
-          ...cvData,
-          fullName: profile.fullName || cvData.fullName,
-          email: profile.email || cvData.email,
-          phone: profile.phone || cvData.phone,
-          location: profile.location || cvData.location,
-          summary: profile.summary || cvData.summary,
-          skills: profile.skills.length > 0 ? [...new Set([...profile.skills, ...(selectedJob?.skills_needed || [])])] : cvData.skills,
-          experience: profile.experience.length > 0 ? profile.experience : cvData.experience,
-          education: profile.education.length > 0 ? profile.education : cvData.education,
-        };
-        onUpdate(initialData);
+      setCVData(initialData);
+
+      // Auto-optimize if we have a job and a profile
+      if (selectedJob && !isGenerating) {
+        setHasOptimized(selectedJob.id);
+        optimizeCV(initialData);
       }
     }
-  }, [hasProfile, profile, selectedJob?.id, hasOptimized]);
+  }, [hasProfile, profile, selectedJob?.id, isGenerating, hasOptimized]);
+
+  const handleProfileExtracted = (extracted: Partial<UserProfile>) => {
+    const updatedData = {
+      ...cvData,
+      fullName: extracted.fullName || cvData.fullName,
+      email: extracted.email || cvData.email,
+      phone: extracted.phone || cvData.phone,
+      location: extracted.location || cvData.location,
+      summary: extracted.summary || cvData.summary,
+      skills: extracted.skills ? [...new Set([...extracted.skills, ...(selectedJob?.skills_needed || [])])] : cvData.skills,
+      experience: extracted.experience || cvData.experience,
+      education: extracted.education || cvData.education,
+    };
+
+    setCVData(updatedData);
+
+    // Save to profile for future use
+    saveProfile(extracted);
+    toast.success('Profile saved for future use');
+
+    // Trigger optimization after extraction if job is present
+    if (selectedJob && !isGenerating) {
+      setTimeout(() => optimizeCV(updatedData), 500);
+    }
+  };
 
   const saveCurrentProfile = () => {
     saveProfile({
@@ -76,140 +104,139 @@ export function CVGenerator({
 
   const addSkill = () => {
     if (newSkill.trim() && !cvData.skills.includes(newSkill.trim())) {
-      onUpdate({
-        ...cvData,
-        skills: [...cvData.skills, newSkill.trim()]
-      });
+      setCVData(prev => ({
+        ...prev,
+        skills: [...prev.skills, newSkill.trim()]
+      }));
       setNewSkill('');
     }
   };
 
   const removeSkill = (skill: string) => {
-    onUpdate({
-      ...cvData,
-      skills: cvData.skills.filter(s => s !== skill)
-    });
+    setCVData(prev => ({
+      ...prev,
+      skills: prev.skills.filter(s => s !== skill)
+    }));
   };
 
   const addExperience = () => {
-    onUpdate({
-      ...cvData,
-      experience: [...cvData.experience, { title: '', company: '', duration: '', description: '' }]
-    });
+    setCVData(prev => ({
+      ...prev,
+      experience: [...prev.experience, { title: '', company: '', duration: '', description: '' }]
+    }));
   };
 
   const removeExperience = (index: number) => {
-    onUpdate({
-      ...cvData,
-      experience: cvData.experience.filter((_, i) => i !== index)
-    });
+    setCVData(prev => ({
+      ...prev,
+      experience: prev.experience.filter((_, i) => i !== index)
+    }));
   };
 
   const updateExperience = (index: number, field: keyof CVData['experience'][0], value: string) => {
-    onUpdate({
-      ...cvData,
-      experience: cvData.experience.map((exp, i) =>
+    setCVData(prev => ({
+      ...prev,
+      experience: prev.experience.map((exp, i) =>
         i === index ? { ...exp, [field]: value } : exp
       )
-    });
+    }));
   };
 
   const addEducation = () => {
-    onUpdate({
-      ...cvData,
-      education: [...cvData.education, { degree: '', institution: '', year: '' }]
-    });
+    setCVData(prev => ({
+      ...prev,
+      education: [...prev.education, { degree: '', institution: '', year: '' }]
+    }));
   };
 
   const removeEducation = (index: number) => {
-    onUpdate({
-      ...cvData,
-      education: cvData.education.filter((_, i) => i !== index)
-    });
+    setCVData(prev => ({
+      ...prev,
+      education: prev.education.filter((_, i) => i !== index)
+    }));
   };
 
   const updateEducation = (index: number, field: keyof CVData['education'][0], value: string) => {
-    onUpdate({
-      ...cvData,
-      education: cvData.education.map((edu, i) =>
+    setCVData(prev => ({
+      ...prev,
+      education: prev.education.map((edu, i) =>
         i === index ? { ...edu, [field]: value } : edu
       )
-    });
+    }));
   };
 
-  const optimizeCV = async () => {
+  const optimizeCV = async (dataToUse?: CVData) => {
     if (!selectedJob) return;
 
     setIsGenerating(true);
     try {
-      // Use supabase.functions.invoke which automatically handles authentication
-      const jobDescLen = selectedJob.description?.length || 0;
-      toast.info(`Optimizing CV for: ${selectedJob.job_name}`);
+      const currentData = dataToUse || cvData;
 
-      console.log('Invoking generate-cv function:', {
+      // Use supabase.functions.invoke which automatically handles authentication
+      const jobDesc = (selectedJob as Job & { description?: string }).description;
+      const jobDescLen = jobDesc?.length || 0;
+      toast.info(`DEBUG: Job: ${selectedJob.job_name}, DescLen: ${jobDescLen}`);
+
+      console.log('Sending to generate-cv:', {
         jobTitle: selectedJob.job_name,
-        jobCompany: selectedJob.company
+        jobCompany: selectedJob.company,
+        jobDescLength: jobDescLen,
+        jobRequirements: selectedJob.requirements?.length || 0
       });
 
       const { data, error } = await supabase.functions.invoke('generate-cv', {
         body: {
           userProfile: {
-            full_name: cvData.fullName,
-            email: cvData.email,
-            phone: cvData.phone,
-            location: cvData.location,
-            skills: cvData.skills,
-            experience: cvData.experience,
-            education: cvData.education,
-            summary: cvData.summary
+            full_name: currentData.fullName,
+            email: currentData.email,
+            phone: currentData.phone,
+            location: currentData.location,
+            skills: currentData.skills,
+            experience: currentData.experience,
+            education: currentData.education,
+            summary: currentData.summary
           },
           job: selectedJob
         }
       });
 
+      console.log('Received raw data:', data);
+      if (data?.raw_content) {
+        console.log('RAW AI CONTENT:', data.raw_content);
+      }
+      if (data?.data) {
+        console.log('Generated Summary:', data.data.summary);
+        console.log('Generated Experience Count:', data.data.experience?.length);
+        console.log('First Experience Desc:', data.data.experience?.[0]?.achievements?.[0] || data.data.experience?.[0]?.description);
+      }
+
       if (error) {
         throw new Error(`Function error: ${error.message}`);
       }
 
-      console.log('Received data:', data);
-
       if (data.success && data.data) {
         const generated = data.data;
-
-        // Only update if we got valid data back
-        const newSummary = generated.summary && generated.summary.length > 10 ? generated.summary : cvData.summary;
-        const newSkills = Array.isArray(generated.skills) && generated.skills.length > 0 ? generated.skills : cvData.skills;
-
-        const newExperience = Array.isArray(generated.experience) && generated.experience.length > 0
-          ? generated.experience.map((exp: any) => ({
+        setCVData(prev => ({
+          ...prev,
+          summary: generated.summary || prev.summary,
+          skills: Array.isArray(generated.skills) ? generated.skills : prev.skills,
+          experience: Array.isArray(generated.experience) ? generated.experience.map((exp: any) => ({
             title: exp.title || '',
             company: exp.company || '',
-            duration: exp.period || exp.duration || '',
+            duration: exp.period || '',
             description: Array.isArray(exp.achievements) ? exp.achievements.join('\n') : (exp.description || '')
-          }))
-          : cvData.experience;
-
-        const newEducation = Array.isArray(generated.education) && generated.education.length > 0
-          ? generated.education.map((edu: any) => ({
+          })) : prev.experience,
+          education: Array.isArray(generated.education) ? generated.education.map((edu: any) => ({
             degree: edu.degree || '',
             institution: edu.institution || '',
             year: edu.year || ''
-          }))
-          : cvData.education;
-
-        onUpdate({
-          ...cvData,
-          summary: newSummary,
-          skills: newSkills,
-          experience: newExperience,
-          education: newEducation
-        });
+          })) : prev.education
+        }));
 
         if (generated.optimization_report && Array.isArray(generated.optimization_report)) {
           setOptimizationReport(generated.optimization_report);
         }
 
-        setHasOptimized(selectedJob.id);
         toast.success("CV optimized for the job!");
       } else {
         toast.error(data.error || "Failed to optimize CV");
@@ -224,6 +251,9 @@ export function CVGenerator({
 
   return (
     <div className="space-y-8">
+      {/* CV Upload */}
+      <CVUploader onProfileExtracted={handleProfileExtracted} />
+
       {/* Saved Profile Indicator */}
       {hasProfile && (
         <div className="glass-panel p-4 border-l-4 border-primary">
@@ -241,7 +271,7 @@ export function CVGenerator({
       )}
 
       {/* Job Context */}
-      {showJobContext && selectedJob && (
+      {selectedJob && (
         <div className="glass-panel p-6 border-l-4 border-success">
           <div className="flex items-start justify-between">
             <div>
@@ -253,22 +283,20 @@ export function CVGenerator({
               <Badge variant="secondary" className="text-success border-success/30">
                 {selectedJob.relevance_score}% Match
               </Badge>
-              {showOptimizeButton && (
-                <Button
+            <Button
                   size="sm"
                   variant="default"
-                  onClick={optimizeCV}
+                  onClick={() => optimizeCV()}
                   disabled={isGenerating}
                   className="gap-2"
                 >
-                  {isGenerating ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Sparkles className="w-4 h-4" />
-                  )}
-                  {isGenerating ? 'Optimizing...' : 'AI Optimize CV'}
-                </Button>
-              )}
+                {isGenerating ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Sparkles className="w-4 h-4" />
+                )}
+                {isGenerating ? 'Optimizing...' : 'AI Optimize CV'}
+              </Button>
             </div>
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
@@ -317,7 +345,7 @@ export function CVGenerator({
             <Input
               id="fullName"
               value={cvData.fullName}
-              onChange={e => onUpdate({ ...cvData, fullName: e.target.value })}
+              onChange={e => setCVData(prev => ({ ...prev, fullName: e.target.value }))}
               placeholder="John Kamau"
             />
           </div>
@@ -327,7 +355,7 @@ export function CVGenerator({
               id="email"
               type="email"
               value={cvData.email}
-              onChange={e => onUpdate({ ...cvData, email: e.target.value })}
+              onChange={e => setCVData(prev => ({ ...prev, email: e.target.value }))}
               placeholder="john@example.com"
             />
           </div>
@@ -336,7 +364,7 @@ export function CVGenerator({
             <Input
               id="phone"
               value={cvData.phone}
-              onChange={e => onUpdate({ ...cvData, phone: e.target.value })}
+              onChange={e => setCVData(prev => ({ ...prev, phone: e.target.value }))}
               placeholder="+254 700 000 000"
             />
           </div>
@@ -345,7 +373,7 @@ export function CVGenerator({
             <Input
               id="location"
               value={cvData.location}
-              onChange={e => onUpdate({ ...cvData, location: e.target.value })}
+              onChange={e => setCVData(prev => ({ ...prev, location: e.target.value }))}
               placeholder="Nairobi, Kenya"
             />
           </div>
@@ -359,7 +387,7 @@ export function CVGenerator({
         </div>
         <Textarea
           value={cvData.summary}
-          onChange={e => onUpdate({ ...cvData, summary: e.target.value })}
+          onChange={e => setCVData(prev => ({ ...prev, summary: e.target.value }))}
           placeholder="Write a brief professional summary..."
           className="min-h-[100px]"
         />
@@ -509,28 +537,24 @@ export function CVGenerator({
       </div>
 
       {/* Action Buttons */}
-      {children ? (
-        children
-      ) : (
-        <div className="flex gap-4">
-          <Button
-            size="lg"
-            className="flex-1"
-            onClick={() => onGenerate({ ...cvData, selectedJob })}
-          >
-            <Download className="w-5 h-5 mr-2" />
-            Generate & Preview
-          </Button>
-          <Button
-            size="lg"
-            variant="secondary"
-            onClick={saveCurrentProfile}
-          >
-            <Save className="w-5 h-5 mr-2" />
-            Save Profile
-          </Button>
-        </div>
-      )}
+      <div className="flex gap-4">
+        <Button
+          size="lg"
+          className="flex-1"
+          onClick={() => onGenerate({ ...cvData, selectedJob })}
+        >
+          <Download className="w-5 h-5 mr-2" />
+          Generate & Download CV
+        </Button>
+        <Button
+          size="lg"
+          variant="secondary"
+          onClick={saveCurrentProfile}
+        >
+          <Save className="w-5 h-5 mr-2" />
+          Save Profile
+        </Button>
+      </div>
     </div >
   );
 }

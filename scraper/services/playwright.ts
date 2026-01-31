@@ -1,6 +1,6 @@
 import { chromium } from 'playwright-extra';
 import stealthPlugin from 'puppeteer-extra-plugin-stealth';
-import { htmlToText, injectChildContent } from './cheerio';
+import { htmlToText } from './cheerio';
 
 chromium.use(stealthPlugin());
 
@@ -183,7 +183,6 @@ export async function deepScrape(url, options = {}) {
         expandTabs = true,      // Click through tabs
         expandCollapsible = true, // Click "Show more", "Expand all", etc.
         handlePagination = true,  // Follow "Next" buttons
-        inlineExpansion = false,  // Inject child content below links
         waitTime = 2000         // Wait time after interactions (ms)
     } = options;
 
@@ -302,19 +301,9 @@ export async function deepScrape(url, options = {}) {
                     });
 
                     // Filter job-related links and add to queue
-                    // STRICT FILTERING: Only follow links that look like job postings
-                    // Exclude: login, signup, auth, pricing, about, blog, privacy, terms, etc.
-                    const jobRelatedLinks = links.filter(link => {
-                        const lowerLink = link.toLowerCase();
-
-                        // 1. Must contain job-related keywords
-                        const hasJobKeyword = /job|career|position|opening|vacancy|hiring|apply|role|work/i.test(lowerLink);
-
-                        // 2. Must NOT contain non-job keywords
-                        const hasExcludedKeyword = /login|signin|signup|register|auth|password|pricing|about|blog|news|article|privacy|terms|cookie|contact|faq|help|support|forgot|reset|account|profile|dashboard|admin|settings|preferences|logout|signout/i.test(lowerLink);
-
-                        return hasJobKeyword && !hasExcludedKeyword;
-                    });
+                    const jobRelatedLinks = links.filter(link =>
+                        /job|career|position|opening|vacancy|hiring|apply/i.test(link)
+                    );
 
                     for (const link of jobRelatedLinks.slice(0, 5)) { // Max 5 links per page
                         if (!visitedUrls.has(link)) {
@@ -322,7 +311,7 @@ export async function deepScrape(url, options = {}) {
                         }
                     }
 
-                    console.log(`[Deep Scrape] Added ${jobRelatedLinks.slice(0, 5).length} job-related links to queue (filtered from ${links.length})`);
+                    console.log(`[Deep Scrape] Added ${jobRelatedLinks.slice(0, 5).length} job-related links to queue`);
                 }
 
             } catch (pageError) {
@@ -335,35 +324,11 @@ export async function deepScrape(url, options = {}) {
         console.log(`[Deep Scrape] Complete! Scraped ${allContent.length} pages from ${visitedUrls.size} URLs`);
 
         // Convert HTML to Text
-        let processedData = allContent.map(page => {
+        const processedData = allContent.map(page => {
             const text = htmlToText(page.html);
             console.log(`[Deep Scrape] Converted ${page.url} -> ${text.length} chars`);
             return { ...page, text };
         });
-
-        // INLINE EXPANSION: Consolidate into parent page
-        if (inlineExpansion && processedData.length > 0) {
-            console.log('[Deep Scrape] Performing inline expansion...');
-
-            // Start with the main page (first one)
-            let mainPage = processedData[0];
-            let consolidatedText = mainPage.text;
-
-            // Iterate through child pages and inject them
-            for (let i = 1; i < processedData.length; i++) {
-                const childPage = processedData[i];
-                consolidatedText = injectChildContent(consolidatedText, childPage.url, childPage.text);
-            }
-
-            // Return only the consolidated main page
-            processedData = [{
-                ...mainPage,
-                text: consolidatedText,
-                title: `${mainPage.title} (Expanded)`,
-                inlineExpanded: true,
-                childPages: processedData.length - 1
-            }];
-        }
 
         return {
             success: true,

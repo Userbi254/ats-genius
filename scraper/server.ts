@@ -6,24 +6,8 @@ import { extractJobsWithCheerio, extractLinks, htmlToText } from './services/che
 import { scrapeWithFirecrawl } from './services/firecrawl.js';
 import { scrapeWithFetch } from './services/httpFetch.js';
 import { scrapeWithSelenium } from './services/selenium.js';
+import { extractWithGemini, extractFromHimalayas, ExtractedJob } from './services/gemini.js';
 import { saveJobs, saveWorkflowRun } from './services/supabase.js';
-
-// Define ExtractedJob interface locally since we removed gemini.ts
-interface ExtractedJob {
-    job_name: string;
-    company: string | null;
-    description: string;
-    amount: string | null;
-    location: string | null;
-    employment_details: string[];
-    requirements: string[];
-    skills_needed: string[];
-    site_url: string;
-    application_url: string | null;
-    deadline: string | null;
-    starting_date: string | null;
-    payment_method: string | null;
-}
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -48,7 +32,7 @@ app.get('/health', (req: Request, res: Response) => {
     res.json({
         success: true,
         message: 'AI Job Scraper - Local First',
-        services: ['playwright', 'selenium', 'firecrawl', 'http-fetch', 'supabase'],
+        services: ['playwright', 'selenium', 'firecrawl', 'http-fetch', 'gemini', 'supabase'],
         version: '3.1.0'
     });
 });
@@ -260,7 +244,7 @@ app.post('/deep-scrape', async (req: Request, res: Response) => {
 
 /**
  * POST /extract-jobs
- * Extract jobs from content using Cheerio (Gemini removed)
+ * Extract jobs from content using Gemini AI
  */
 app.post('/extract-jobs', async (req: Request, res: Response) => {
     try {
@@ -278,23 +262,51 @@ app.post('/extract-jobs', async (req: Request, res: Response) => {
         let jobs: ExtractedJob[] = [];
         let provider = 'None';
 
-        // Strategy 1: Try Cheerio (Gemini removed)
-        log('Trying Cheerio extraction...');
-        const cheerioJobs = extractJobsWithCheerio(pageContent, pageUrl);
-        if (cheerioJobs.length > 0) {
-            jobs = cheerioJobs.map(j => ({
-                ...j,
-                amount: null,
-                location: null,
-                employment_details: [],
-                requirements: [],
-                skills_needed: [],
-                application_url: null,
-                deadline: null,
-                starting_date: null,
-                payment_method: null
-            }));
-            provider = 'Cheerio';
+        // Strategy 1: Try Gemini (primary extraction method)
+        const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+        if (geminiKey) {
+            log('[Gemini] API key found, starting extraction...');
+            const geminiJobs = await extractWithGemini(pageContent, pageUrl, log);
+            if (geminiJobs.length > 0) {
+                jobs = geminiJobs;
+                provider = 'Gemini';
+                log(`[Gemini] Extracted ${jobs.length} jobs`);
+            } else {
+                log('[Gemini] Returned 0 jobs, trying fallbacks...');
+            }
+        } else {
+            log('[Gemini] No API key found (GEMINI_API_KEY or GOOGLE_API_KEY), skipping...');
+        }
+
+        // Strategy 2: Try himalayas pattern matching
+        if (jobs.length === 0) {
+            log('Trying Himalayas pattern extraction...');
+            const himalayasJobs = extractFromHimalayas(pageContent, pageUrl);
+            if (himalayasJobs.length > 0) {
+                jobs = himalayasJobs;
+                provider = 'Himalayas';
+            }
+        }
+
+        // Strategy 3: Try Cheerio
+        if (jobs.length === 0) {
+            log('Trying Cheerio extraction...');
+            const cheerioJobs = extractJobsWithCheerio(pageContent, pageUrl);
+            if (cheerioJobs.length > 0) {
+                jobs = cheerioJobs.map(j => ({
+                    ...j,
+                    amount: null,
+                    location: null,
+                    employment_details: [],
+                    requirements: [],
+                    skills_needed: [],
+                    application_url: null,
+                    deadline: null,
+                    starting_date: null,
+                    payment_method: null
+                }));
+                provider = 'Cheerio';
+            }
         }
 
         // Dedupe by job name
@@ -365,24 +377,20 @@ app.post('/crawl-and-extract', async (req: Request, res: Response) => {
         let jobs: ExtractedJob[] = [];
         let extractProvider = 'None';
 
-        // Gemini extraction removed. Fallback to Cheerio or other logic if needed.
-        // For now, we'll just use Cheerio as in /extract-jobs
+        if (process.env.GEMINI_API_KEY) {
+            const geminiJobs = await extractWithGemini(scrapeResult.text, url, log);
+            if (geminiJobs.length > 0) {
+                jobs = geminiJobs;
+                extractProvider = 'Gemini';
+            }
+        }
 
-        const cheerioJobs = extractJobsWithCheerio(scrapeResult.text, url);
-        if (cheerioJobs.length > 0) {
-            jobs = cheerioJobs.map(j => ({
-                ...j,
-                amount: null,
-                location: null,
-                employment_details: [],
-                requirements: [],
-                skills_needed: [],
-                application_url: null,
-                deadline: null,
-                starting_date: null,
-                payment_method: null
-            }));
-            extractProvider = 'Cheerio';
+        if (jobs.length === 0) {
+            const himalayasJobs = extractFromHimalayas(scrapeResult.text, url);
+            if (himalayasJobs.length > 0) {
+                jobs = himalayasJobs;
+                extractProvider = 'Himalayas';
+            }
         }
 
         // Step 3: Optionally save to DB
@@ -487,8 +495,6 @@ app.post('/html-to-text', (req: Request, res: Response) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
-
-// Endpoint removed: /generate-cv (Moved to Supabase Edge Function)
 
 // Start server
 app.listen(PORT, () => {

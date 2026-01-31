@@ -8,7 +8,7 @@ const corsHeaders = {
 
 async function callOpenRouter(prompt: string): Promise<string | null> {
   const apiKey = Deno.env.get('CV_OPENROUTER_API_KEY');
-
+  
   console.log('API Key present:', !!apiKey);
   console.log('API Key length:', apiKey?.length || 0);
 
@@ -123,12 +123,7 @@ CRITICAL EXTRACTION RULES:
    - **Dates**: Extract the END year (e.g., "Sept 2020 – Oct 2024" -> "2024").
 4. **SKILLS**: If a "Technical Competencies" or "Skills" section exists, extract them. If not, infer from experience.
 5. **CHRONOLOGY**: Ensure education and experience are listed.
-7. **EXPERIENCE & EDUCATION**: 
-   - Extract ALL listed roles and degrees. Do not limit to the accurate match only.
-   - For **description**: Capture the full text including bullet points. Convert bullet points to a clean paragraph or list format if possible, but keep the content.
-   - **Dates**: If a range is given (e.g. "2019 - 2021"), keep it as is in 'period' for Experience. For Education 'year', infer the graduation year.
-   - **Titles**: Capture the full job title.
-   - If a section is missing, return an empty array, NOT null.
+6. **NO MARKDOWN**: Return raw JSON only.
 `;
 
     console.log('Parsing CV text of length:', cvText.length);

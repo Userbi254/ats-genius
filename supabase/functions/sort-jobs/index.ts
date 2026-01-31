@@ -79,13 +79,13 @@ serve(async (req) => {
         console.log(`Sorting ${jobs.length} jobs by ${sortBy}...`);
 
         // Calculate relevance score for each job
-        const jobsWithScores = jobs.map((job: Record<string, unknown>) => ({
+        const jobsWithScores: Record<string, unknown>[] = jobs.map((job: Record<string, unknown>) => ({
             ...job,
             relevance_score: calculateRelevanceScore(job)
         }));
 
         // Sort based on criteria
-        let sortedJobs;
+        let sortedJobs: Record<string, unknown>[];
         if (sortBy === 'relevance') {
             sortedJobs = jobsWithScores.sort((a, b) =>
                 (b.relevance_score as number) - (a.relevance_score as number)

@@ -144,41 +144,10 @@ export function extractLinks(html: string, baseUrl: string): string[] {
 }
 
 /**
- * Extracts text content from HTML, preserving links in Markdown format
+ * Extracts text content from HTML
  */
 export function htmlToText(html: string): string {
     const $ = cheerio.load(html);
     $('script, style, noscript').remove();
-
-    // Convert links to markdown format [text](url)
-    $('a[href]').each((i, el) => {
-        const $el = $(el);
-        const text = $el.text().trim();
-        const href = $el.attr('href');
-        if (text && href && !href.startsWith('#') && !href.startsWith('javascript:')) {
-            $el.replaceWith(` [${text}](${href}) `);
-        }
-    });
-
     return $('body').text().replace(/\s+/g, ' ').trim();
-}
-
-/**
- * Injects child content below the corresponding link in the parent text
- */
-export function injectChildContent(parentText: string, childUrl: string, childContent: string): string {
-    // Escape special regex characters in the URL
-    const escapedUrl = childUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // Look for [text](url) pattern
-    const linkPattern = new RegExp(`\\[([^\\]]+)\\]\\(${escapedUrl}\\)`, 'i');
-
-    const match = parentText.match(linkPattern);
-    if (match) {
-        const fullLink = match[0];
-        const replacement = `\n${fullLink}\n\n--- START CHILD CONTENT (${childUrl}) ---\n${childContent}\n--- END CHILD CONTENT ---\n`;
-        return parentText.replace(fullLink, replacement);
-    }
-
-    // If link not found in markdown format, just append
-    return `${parentText}\n\n--- CHILD CONTENT (${childUrl}) ---\n${childContent}\n`;
 }

@@ -5,8 +5,6 @@ export interface UserProfile {
   email: string;
   phone: string;
   location: string;
-  linkedin_url?: string;
-  portfolio_url?: string;
   summary: string;
   skills: string[];
   experience: Array<{

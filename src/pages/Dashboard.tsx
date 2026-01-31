@@ -148,7 +148,7 @@ export default function Dashboard() {
         console.warn("Sorting failed, using unsorted jobs:", e);
       }
 
-      await supabase.from('workflow_runs').update({
+      await (supabase.from('workflow_runs') as any).update({
         status: 'completed',
         extracted_jobs: sortedJobs,
         completed_at: new Date().toISOString()
@@ -201,9 +201,9 @@ export default function Dashboard() {
 
             // Collect jobs from sorted_jobs (prioritized) or extracted_jobs
             if (run.sorted_jobs && Array.isArray(run.sorted_jobs)) {
-              allJobs.push(...run.sorted_jobs);
+              allJobs.push(...(run.sorted_jobs as unknown[] as Job[]));
             } else if (run.extracted_jobs && Array.isArray(run.extracted_jobs)) {
-              allJobs.push(...run.extracted_jobs);
+              allJobs.push(...(run.extracted_jobs as unknown[] as Job[]));
             }
           });
         }

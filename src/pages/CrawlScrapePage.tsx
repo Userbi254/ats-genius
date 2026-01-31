@@ -82,40 +82,6 @@ export default function CrawlScrapePage() {
     toast.success("Content downloaded");
   };
 
-  // Download ALL content as a single text file
-  const handleDownloadAll = () => {
-    const successfulResults = results.filter(r => r.status === 'success' && r.text);
-    if (successfulResults.length === 0) {
-      toast.error("No successful crawls to download");
-      return;
-    }
-
-    const aggregatedText = successfulResults.map(r => {
-      return `
-================================================================================
-URL: ${r.url}
-DATE: ${new Date().toISOString()}
-METHOD: ${r.method}
-TOOL: ${r.tool}
-================================================================================
-
-${r.text}
-
-`;
-    }).join('\n\n');
-
-    const blob = new Blob([aggregatedText], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `collective-crawl-${Date.now()}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast.success(`Downloaded ${successfulResults.length} pages in one file`);
-  };
-
   // Preview content in modal
   const handlePreview = (result: CrawlResult) => {
     if (!result.text) {
@@ -123,34 +89,6 @@ ${r.text}
       return;
     }
     setPreviewContent({ url: result.url, text: result.text });
-  };
-
-  // Preview ALL content
-  const handlePreviewAll = () => {
-    const successfulResults = results.filter(r => r.status === 'success' && r.text);
-    if (successfulResults.length === 0) {
-      toast.error("No successful crawls to preview");
-      return;
-    }
-
-    const aggregatedText = successfulResults.map(r => {
-      return `
-================================================================================
-URL: ${r.url}
-DATE: ${new Date().toISOString()}
-METHOD: ${r.method}
-TOOL: ${r.tool}
-================================================================================
-
-${r.text}
-
-`;
-    }).join('\n\n');
-
-    setPreviewContent({
-      url: `Collective Preview (${successfulResults.length} pages)`,
-      text: aggregatedText
-    });
   };
 
   // Fetch recent crawls
@@ -170,7 +108,11 @@ ${r.text}
         .limit(10);
 
       if (data) {
-        setRecentCrawls(data);
+        // Filter out records with empty arrays
+        const validCrawls = data.filter(run => 
+          Array.isArray(run.crawled_pages) && run.crawled_pages.length > 0
+        );
+        setRecentCrawls(validCrawls);
       }
     } catch (error) {
       console.error('Failed to fetch recent crawls:', error);
@@ -328,11 +270,11 @@ ${r.text}
     setIsCrawling(false);
     setAutoCrawlComplete(true);
 
-    // Save crawl results to database
+    // Save crawl results to database only if we have valid results
     const successfulResults = crawlResults.filter(r => r.status === 'success' && r.text && r.text.trim().length > 0);
     if (successfulResults.length > 0) {
       try {
-        await supabase.from('workflow_runs').insert({
+        await (supabase.from('workflow_runs') as any).insert({
           status: 'completed',
           started_at: new Date().toISOString(),
           crawled_pages: successfulResults.map(r => ({
@@ -341,7 +283,11 @@ ${r.text}
             text_length: r.text_length,
             num_links: r.num_links,
             text: r.text
-          }))
+          })),
+          // Set other arrays to null to prevent empty array records
+          search_results: null,
+          extracted_jobs: null,
+          sorted_jobs: null
         });
         fetchRecentCrawls(); // Refresh the list
       } catch (err) {
@@ -659,22 +605,6 @@ ${r.text}
 
         {/* Results */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Results ({results.length})</h3>
-            {results.some(r => r.status === 'success') && (
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={handlePreviewAll}>
-                  <Eye className="w-4 h-4 mr-2" />
-                  Preview All
-                </Button>
-                <Button variant="default" size="sm" onClick={handleDownloadAll}>
-                  <Download className="w-4 h-4 mr-2" />
-                  Download All
-                </Button>
-              </div>
-            )}
-          </div>
-
           {results.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground glass-panel">
               <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
